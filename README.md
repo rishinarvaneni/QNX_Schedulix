@@ -37,9 +37,9 @@ Schedulix bridges this gap by combining deterministic, zero-allocation applicati
 graph LR
     subgraph AUTOMOTIVE WORKLOAD LAYER
         direction TB
-        BRAKE_CTL[BRAKE_CTL (Prio 20)]:::ASIL-D
-        ADAS_FUSION[ADAS_FUSION (Prio 15)]:::ASIL-B
-        DIAG[DIAG (Prio 10)]:::QM
+        BRAKE_CTL[BRAKE_CTL (Prio 20)]
+        ADAS_FUSION[ADAS_FUSION (Prio 15)]
+        DIAG[DIAG (Prio 10)]
     end
 
     subgraph MPSC BOUNDED SHARED-MEMORY RING BUFFER
@@ -60,6 +60,10 @@ graph LR
     classDef ASIL-D fill:#ffdddd,stroke:#ff0000,stroke-width:2px;
     classDef ASIL-B fill:#ffffdd,stroke:#cccc00,stroke-width:2px;
     classDef QM fill:#ddffff,stroke:#00ccff,stroke-width:2px;
+
+    class BRAKE_CTL ASIL-D
+    class ADAS_FUSION ASIL-B
+    class DIAG QM
 ```
 
 ## Real-Time Workload Model
