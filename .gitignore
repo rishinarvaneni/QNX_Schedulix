@@ -7,14 +7,14 @@
 *.zip
 brake_run.kev
 brake_validation2.kev
-*. tracing
-trace.kev
 
-# IDE specific
+# IDE and Eclipse workspace settings (machine-specific)
 .metadata/
 org.eclipse/
 *.diff
 *.patch
+.*.projc
+.*.cproject
 
 # Logs
 *.log
@@ -29,3 +29,7 @@ Thumbs.db
 
 # Serial console state
 serial_console.ps1.state
+
+# IP addresses (these are target machine references)
+192.168.10.2/
+192.168.10.5/
