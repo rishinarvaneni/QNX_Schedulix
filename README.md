@@ -31,41 +31,6 @@ Schedulix bridges this gap by combining deterministic, zero-allocation applicati
   - **CAN Layer**: Non-blocking simulated adapter queue + TCP socket injection server.
 - **Automated S0–S6 Benchmark Matrix**: Built-in test harness executing baseline runs, 20%–95% CPU load sweeps, mutex priority inversions, CAN event storms, and core affinity contention.
 
-## System Architecture
-
-```mermaid
-graph LR
-    subgraph AUTOMOTIVE WORKLOAD LAYER
-        direction TB
-        BRAKE_CTL[BRAKE_CTL (Prio 20)]
-        ADAS_FUSION[ADAS_FUSION (Prio 15)]
-        DIAG[DIAG (Prio 10)]
-    end
-
-    subgraph MPSC BOUNDED SHARED-MEMORY RING BUFFER
-        direction LR
-        LB[• Lock-free sequence publication]
-        RB[• 48-byte fixed records]
-        ZA[• Zero runtime heap allocation]
-        PF[• Post-mortem file flush]
-    end
-
-    subgraph SCHEDULIX ANALYZER ENGINE
-        direction TB
-        KEV[• .kev trace decoding]
-        RCA[• Delay attribution & RCA]
-        JSON[• analysis.json output]
-    end
-
-    classDef ASIL-D fill:#ffdddd,stroke:#ff0000,stroke-width:2px;
-    classDef ASIL-B fill:#ffffdd,stroke:#cccc00,stroke-width:2px;
-    classDef QM fill:#ddffff,stroke:#00ccff,stroke-width:2px;
-
-    class BRAKE_CTL ASIL-D
-    class ADAS_FUSION ASIL-B
-    class DIAG QM
-```
-
 ## Real-Time Workload Model
 
 | Task Name | Task ID | Priority | Period | Deadline | Execution Demand | Criticality | Target Role |
