@@ -9,27 +9,62 @@
 
 In modern Software-Defined Vehicles (SDVs), mixed-criticality workloads (e.g., ASIL-D Braking, ASIL-B ADAS perception, and diagnostic telemetry) share multicore SoCs. Traditional CPU utilization graphs show that a system is loaded, but fail to explain why a deadline was missed, which higher-priority task caused preemption, or how microsecond jitter cascaded.
 
-Schedulix bridges this gap by combining deterministic, zero-allocation application instrumentation with native QNX kernel trace decoding (libtraceparser) to deliver quantitative delay attribution, context-switch correlation, and evidence-backed root-cause analysis.
+I built Schedulix to answer a concrete question: *Can we quantitatively decompose activation latency so an engineer actually knows what caused a deadline miss?* — instead of just seeing that a system is "loaded."
 
-## Visual Showcase
+## What This Project Is
 
-| Performance Dashboard | Scheduling Gantt Timeline |
-|:----------------------:|:--------------------------:|
-| Dashboard | Timeline |
-| Real-time task latencies, response percentiles (p50/p95/p99), and deadline slack | Multi-core CPU execution lanes, thread state transitions, and context switches |
+Schedulix combines deterministic, zero-allocation application instrumentation with native QNX kernel trace decoding (`libtraceparser`) to deliver:
+
+- **Quantitative delay attribution**: Response Time = Ready Queue Wait + Preemption Duration + Blocking Time + Execution Time
+- **Evidence-backed root-cause engine**: Classifies deadline misses with explicit confidence levels (CONFIRMED vs INFERRED) and identifies the interfering PID, TID, priority, and exact overlap window
+- **Hardware-accurate peripherals**: Physical UART (`/dev/ser1` at 115200 baud), GPIO markers at `0xFE200000` for sub-µs oscilloscope verification, and a CAN layer with non-blocking simulated adapter queue + TCP socket injection server
+- **Automated S0–S6 benchmark matrix**: Baseline runs, 20%→95% CPU load sweeps, mutex priority inversions, CAN event storms, and core affinity contention
 
 ## Core Engineering Highlights
 
-- **Native QNX libtraceparser C API Integration**: Directly decodes raw binary `.kev` trace streams captured by `tracelogger`. Reconstructs 64-bit cycle timestamps using sequential rollover detection—zero brittle regex text parsing.
-- **Zero-Allocation MPSC Ring Buffer**: Fixed-size 48-byte records in bounded shared memory with lock-free sequence publication. Guaranteed zero `malloc()` calls in the critical execution path to preserve deterministic RTOS timing.
-- **Formal Delay Attribution Model**: Quantitatively decomposes activation latency:
-  > Response Time = Ready Queue Wait + Preemption Duration + Blocking Time + Execution Time
-- **Evidence-Backed Root Cause Engine**: Classifies deadline misses with explicit confidence levels (CONFIRMED vs INFERRED) and identifies the interfering process ID, thread ID, priority, and exact overlap window.
-- **Hardware & Peripherals**:
-  - **Physical UART**: Real POSIX serial driver (`/dev/ser1` at 115200 baud) for telemetry & external event triggering.
-  - **Hardware GPIO Markers**: Direct BCM2711 peripheral register memory mapping (`0xFE200000`) for sub-microsecond physical oscilloscope timing verification.
-  - **CAN Layer**: Non-blocking simulated adapter queue + TCP socket injection server.
-- **Automated S0–S6 Benchmark Matrix**: Built-in test harness executing baseline runs, 20%–95% CPU load sweeps, mutex priority inversions, CAN event storms, and core affinity contention.
+- **Native QNX libtraceparser C API**: Directly decodes raw binary `.kev` trace streams captured by `tracelogger`. Reconstructs 64-bit cycle timestamps using sequential rollover detection — zero brittle regex text parsing.
+- **Zero-allocation MPSC ring buffer**: Fixed-size 48-byte records in bounded shared memory with lock-free sequence publication. Guaranteed zero `malloc()` calls in the critical execution path to preserve deterministic RTOS timing.
+- **Formal delay attribution model**: Quantitatively decomposes activation latency as Response Time = Ready Queue Wait + Preemption Duration + Blocking Time + Execution Time
+- **Evidence-backed root cause engine**: Classifies deadline misses with CONFIRMED vs INFERRED confidence and identifies the interfering process ID, thread ID, priority, and exact overlap window
+- **Physical UART**: Real POSIX serial driver (`/dev/ser1` at 115200 baud) for telemetry & external event triggering
+- **Hardware GPIO markers**: Direct BCM2711 peripheral register memory mapping (`0xFE200000`) for sub-microsecond physical oscilloscope timing verification
+- **CAN layer**: Non-blocking simulated adapter queue + TCP socket injection server
+- **Automated S0–S6 Benchmark Matrix**: Built-in test harness executing baseline runs, 20%–95% CPU load sweeps, mutex priority inversions, CAN event storms, and core affinity contention
+
+## System Architecture
+
+```mermaid
+graph LR
+    subgraph AUTOMOTIVE WORKLOAD LAYER
+        direction TB
+        BRAKE_CTL[BRAKE_CTL (Prio 20)]
+        ADAS_FUSION[ADAS_FUSION (Prio 15)]
+        DIAG[DIAG (Prio 10)]
+    end
+
+    subgraph MPSC BOUNDED SHARED-MEMORY RING BUFFER
+        direction LR
+        LB[• Lock-free sequence publication]
+        RB[• 48-byte fixed records]
+        ZA[• Zero runtime heap allocation]
+        PF[• Post-mortem file flush]
+    end
+
+    subgraph SCHEDULIX ANALYZER ENGINE
+        direction TB
+        KEV[• .kev trace decoding]
+        RCA[• Delay attribution & RCA]
+        JSON[• analysis.json output]
+    end
+
+    classDef ASIL-D fill:#ffdddd,stroke:#ff0000,stroke-width:2px;
+    classDef ASIL-B fill:#ffffdd,stroke:#cccc00,stroke-width:2px;
+    classDef QM fill:#ddffff,stroke:#00ccff,stroke-width:2px;
+
+    class BRAKE_CTL ASIL-D
+    class ADAS_FUSION ASIL-B
+    class DIAG QM
+```
 
 ## Real-Time Workload Model
 
@@ -86,7 +121,7 @@ Schedulix/
 
 ## 📖 Documentation
 
-| Document | Contents |
+| Document | Purpose |
 |---|---|
 | `docs/BRINGUP_GUIDE.md` | Complete reproducible procedure: clone, host tests, cross-compile, deploy, verify UART and GPIO, build and install the MCP2515 CAN driver |
 | `docs/HACKATHON_RUNBOOK.md` | 48hr hackathon runbook — roles, time-boxed plan, demo script, judge Q&A |
@@ -203,7 +238,7 @@ cd /tmp
 
 ## Hackathon Team & Details
 
-```text
+```
 Project: Schedulix — Automotive RTOS Performance & Latency Analyzer
 Institution: Vasavi College of Engineering
 Team Members:
@@ -214,4 +249,7 @@ Problem Statement: Track 16 — Automotive RTOS Scheduling Analysis, Instrumenta
 ```
 
 ---
+
 *Built with QNX SDP 8.0 • Designed for automotive safety-critical mixed-criticality workloads*
+
+---
