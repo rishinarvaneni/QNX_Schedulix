@@ -1,135 +1,248 @@
-# QNX_Schedulix
+# Schedulix: Automotive RTOS Performance & Latency Analyzer
 
-**Automotive RTOS Performance & Latency Analyzer** - QNX Neutrino RTOS scheduling and IPC analysis project.
-
-[![RTOS](https://img.shields.io/badge/RTOS-QNX_Neutrino_8.0-blue.svg)](https://blackberry.qnx.com)
-[![Platform](https://img.shields.io/badge/Platform-aarch64le-green.svg)](https://www.qnx.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![QNX](https://img.shields.io/badge/RTOS-QNX_Neutrino_8.0-blue.svg)](https://blackberry.qnx.com)
+[![License](https://img.shields.io/badge/License-QNX_Target_GUI-green.svg)](LICENSE)
 
 ## Project Overview
 
-This project implements a brake request/response system using **QNX Neutrino RTOS** primitives to demonstrate:
-- Priority-based preemptive scheduling with `SCHED_FIFO`
-- Inter-Process Communication (IPC) via QNX message passing (`MsgSend`/`MsgReceive`)
-- Name service for location-transparent client-server connectivity
-- Nanosecond-resolution timing using `clock_gettime(CLOCK_MONOTONIC)`
+**Schedulix** is an explainable real-time performance and latency analysis engine designed for safety-critical automotive workloads running on QNX Neutrino RTOS (SDP 8.0).
 
-The system consists of two processes:
-- **Server** (`break_workload`): High-priority (`30`) thread that receives brake requests via name service and responds with timing data
-- **Client** (`break_trigger`): Sends 10 brake requests to the server and measures response times
+In modern Software-Defined Vehicles (SDVs), mixed-criticality workloads (e.g., ASIL-D Braking, ASIL-B ADAS perception, and diagnostic telemetry) share multicore SoCs. Traditional CPU utilization graphs show that a system is loaded, but fail to explain why a deadline was missed, which higher-priority task caused preemption, or how microsecond jitter cascaded.
 
-## Team Members
+Schedulix bridges this gap by combining deterministic, zero-allocation application instrumentation with native QNX kernel trace decoding (libtraceparser) to deliver quantitative delay attribution, context-switch correlation, and evidence-backed root-cause analysis.
 
-This project was developed as part of the QNX Hackathon submission. Team members include:
+## Visual Showcase
 
-| Name | Role | GitHub |
-|------|------|--------|
-| [Team Member 1] | RTOS Kernel & Scheduling | [github_handle] |
-| [Team Member 2] | IPC & Messaging Architecture | [github_handle] |
-| [Team Member 3] | Timing & Instrumentation | [github_handle] |
-| [Team Member 4] | Build Systems & Deployment | [github_handle] |
+| Performance Dashboard | Scheduling Gantt Timeline |
+|:----------------------:|:--------------------------:|
+| Dashboard | Timeline |
+| Real-time task latencies, response percentiles (p50/p95/p99), and deadline slack | Multi-core CPU execution lanes, thread state transitions, and context switches |
 
-*Replace placeholder names with actual team member details before final submission.*
+## Core Engineering Highlights
 
-## Phase-Wise Study Coverage
+- **Native QNX libtraceparser C API Integration**: Directly decodes raw binary `.kev` trace streams captured by `tracelogger`. Reconstructs 64-bit cycle timestamps using sequential rollover detection—zero brittle regex text parsing.
+- **Zero-Allocation MPSC Ring Buffer**: Fixed-size 48-byte records in bounded shared memory with lock-free sequence publication. Guaranteed zero `malloc()` calls in the critical execution path to preserve deterministic RTOS timing.
+- **Formal Delay Attribution Model**: Quantitatively decomposes activation latency:
+  > Response Time = Ready Queue Wait + Preemption Duration + Blocking Time + Execution Time
+- **Evidence-Backed Root Cause Engine**: Classifies deadline misses with explicit confidence levels (CONFIRMED vs INFERRED) and identifies the interfering process ID, thread ID, priority, and exact overlap window.
+- **Hardware & Peripherals**:
+  - **Physical UART**: Real POSIX serial driver (`/dev/ser1` at 115200 baud) for telemetry & external event triggering.
+  - **Hardware GPIO Markers**: Direct BCM2711 peripheral register memory mapping (`0xFE200000`) for sub-microsecond physical oscilloscope timing verification.
+  - **CAN Layer**: Non-blocking simulated adapter queue + TCP socket injection server.
+- **Automated S0–S6 Benchmark Matrix**: Built-in test harness executing baseline runs, 20%–95% CPU load sweeps, mutex priority inversions, CAN event storms, and core affinity contention.
 
-### Phase 1: RTOS Fundamentals
-- QNX Neutrino RTOS concepts and architecture
-- Processes vs. threads in QNX
-- POSIX standards compliance on QNX
-- Scheduling policies: `SCHED_FIFO`, `SCHED_RR`, and `SCHED_OTHER`
-- Priority-based preemptive scheduling mechanisms
-- Thread creation and management with `pthread_setschedparam()`
+## System Architecture
 
-### Phase 2: Inter-Process Communication (IPC)
-- QNX Name Service: `name_attach()`, `name_open()`, `name_close()`
-- Message Passing: `MsgSend()`, `MsgReceive()`, `MsgReply()`
-- Pulse message handling (`rcvid == 0` detection)
-- Well-known pathname `/brake` for server registration
-- Location-transparent IPC (clients don't need channel IDs)
+```mermaid
+graph LR
+    subgraph AUTOMOTIVE WORKLOAD LAYER
+        direction TB
+        BRAKE_CTL[BRAKE_CTL (Prio 20)]:::ASIL-D
+        ADAS_FUSION[ADAS_FUSION (Prio 15)]:::ASIL-B
+        DIAG[DIAG (Prio 10)]:::QM
+    end
 
-### Phase 3: Timing and Instrumentation
-- Nanosecond-resolution timestamps via `clock_gettime(CLOCK_MONOTONIC, ...)`
-- Response time calculation: `(completed_ns - release_ns) / 1e6` (ms)
-- Runtime `printf` diagnostics for server and client
-- Trace validation with QNX `.kev` kernel event files
+    subgraph MPSC BOUNDED SHARED-MEMORY RING BUFFER
+        direction LR
+        LB[• Lock-free sequence publication]
+        RB[• 48-byte fixed records]
+        ZA[• Zero runtime heap allocation]
+        PF[• Post-mortem file flush]
+    end
 
-### Phase 4: Scheduling Analysis
-- FIFO scheduling: once server starts a request, runs to completion
-- Priority preemption: threads > 30 can preempt; threads < 30 cannot interrupt
-- Verification commands: `cat /proc/self/sched`, `pidin t | grep brake_workload`
-- Expected behavior analysis with multi-priority thread systems
+    subgraph SCHEDULIX ANALYZER ENGINE
+        direction TB
+        KEV[• .kev trace decoding]
+        RCA[• Delay attribution & RCA]
+        JSON[• analysis.json output]
+    end
 
-### Phase 5: Build and Execution
-- **Build commands**: `make clean`, `make all`, `make rebuild`
-- **Build profiles**: debug (`-g -O0`), release (`-O2`), coverage, profile
-- **Platform**: `aarch64le` (QNX Neutrino 8.0)
-- **Serialization**: `tools/serial_console.ps1` for target board communication
+    classDef ASIL-D fill:#ffdddd,stroke:#ff0000,stroke-width:2px;
+    classDef ASIL-B fill:#ffffdd,stroke:#cccc00,stroke-width:2px;
+    classDef QM fill:#ddffff,stroke:#00ccff,stroke-width:2px;
+```
 
-### Phase 6: .kev File Validation (QNX Kernel Events)
-- Kernel event tracing with `tracetool` or `procnto -k trace`
-- Expected events: `SchedEnter/SchedLeave`, `MsgSend/MsgsReply`, `TimerEnter/TimerExit`, `NameAttach/NameOpen`
-- Cross-reference `printf` output values with `.kev` events
-- Validation steps for IPC timing correctness
+## Real-Time Workload Model
 
-### Phase 7: Data Structures
-- `brake_request_t`: `{sequence, brake_request, release_ns}` - client-to-server
-- `brake_response_t`: `{sequence, decision, received_ns, completed_ns}` - server-to-client
+| Task Name | Task ID | Priority | Period | Deadline | Execution Demand | Criticality | Target Role |
+|-----------|---------|----------|--------|----------|-----------------|-------------|-------------|
+| BRAKE_CTL | 1 | 20 (SCHED_FIFO) | 10 ms | 10 ms | 2.0 ms | ASIL-D | Emergency Braking & Stability Control |
+| ADAS_FUSION | 2 | 15 (SCHED_FIFO) | 20 ms | 20 ms | 8.0 ms | ASIL-B | Radar/Camera Sensor Fusion |
+| DIAG_POLL | 3 | 10 (SCHED_FIFO) | 50 ms | 50 ms | 5.0 ms | QM | OBD-II / UDS Diagnostics Telemetry |
+| STRESS_WORKER | 4-8 | 5 - 22 | Config | Config | Config | Stress | Background Load & Contention Injector |
 
-## Repository Structure
+## Automated Experiment Suite (S0–S6)
+
+| Scenario | Code | Description | Injected Condition | Evaluated Behavior |
+|----------|------|-------------|-------------------|-------------------|
+| Nominal Baseline | S0 | Clean execution | No background stress | Zero jitter, nominal slack (+7.98 ms) |
+| Load Sweep | S1 | Scaled CPU saturation | 20% ➔ 95% background load | Monotonic latency increase, knee detection |
+| Mutex Contention | S2 | Priority inversion | Shared resource lock | Priority inheritance & blocking delays |
+| CAN Burst | S3 | External I/O load | 10x CAN frame bursts | Event Manager dispatch latency & queueing |
+| Preemption Storm | S4 | High-prio preemption | Prio 22 task preemption | Confirmed preemption RCA & lateness metrics |
+| Mixed Criticality | S5 | Combined interference | CPU load + CAN + Mutex | Cumulative latency degradation |
+| Core Affinity | S6 | Multicore contention | Pinning tasks to Core 0 | Cache thrashing & scheduler migration |
+
+## Directory Structure
 
 ```
 Schedulix/
-├── break_trigger/          # Client module
-│   ├── Makefile
-│   ├── src/
-│   │   └── break_trigger.c
-│   └── docs/
-├── break_workload/         # Server module
-│   ├── Makefile
-│   ├── src/
-│   │   └── break_workload.c
-│   ├── docs/
-│   └── MILESTONE_DOCUMENTATION.md
-├── tools/
-│   └── serial_console.ps1
-├── .gitignore
-├── README.md
-└── MILESTONE_DOCUMENTATION.md  # Comprehensive phase documentation
+├── src/                         # QNX Native C Performance Engine
+│   ├── main.c                   # CLI router & command entrypoint
+│   ├── workload.c / .h          # Real-time periodic workload threads
+│   ├── workload_config.c / .h   # Automotive ECU workload parameters
+│   ├── trace_collector.c / .h   # Lock-free MPSC ring buffer collector
+│   ├── trace_schema.h           # 48-byte binary trace record schema
+│   ├── trace_instrumentation.h  # Zero-overhead timestamp macros
+│   ├── qnx_kernel_trace_parser.c/.h # Native libtraceparser .kev parser
+│   ├── scheduler_correlator.c/.h# Per-CPU scheduler transition correlator
+│   ├── analyzer.c / .h          # Delay attribution & RCA engine
+│   ├── stress_generator.c / .h  # Synthetic workload & CPU load generator
+│   ├── stress_scenarios.c / .h  # Automated S0-S6 experiment harness
+│   ├── uart_adapter.c / .h      # Physical POSIX UART driver (/dev/ser1)
+│   ├── gpio_marker.c / .h       # Hardware GPIO memory mapper (0xFE200000)
+│   ├── can_decoder.c / .h       # CAN frame ID & payload decoder
+│   └── event_manager.c / .h     # Asynchronous event dispatcher
+├── gui/                         # Qt 6 / QML Desktop Trace Viewer
+│   ├── Main.qml                 # Main window container & navigation
+│   ├── main.cpp                 # Qt application runner & backend bridge
+│   ├── qml/                     # QML views (Dashboard, Timeline, RCA, Experiments)
+│   └── src/                     # C++ trace file parser & QML data models
+├── screenshots/                 # High-resolution application screenshots
+├── docs/                        # Specifications, architecture, & QNX guides
+├── tests/                       # Unit tests & Python verification scripts
+├── Makefile                     # QNX SDP 8.0 qcc Makefile (aarch64le & x86_64)
+└── Makefile.host                # Host fallback build (Linux/GCC/Clang)
 ```
 
-## Quick Start
+## 📖 Documentation
+
+| Document | Contents |
+|---|---|
+| `docs/BRINGUP_GUIDE.md` | Complete reproducible procedure: clone, host tests, cross-compile, deploy, verify UART and GPIO, build and install the MCP2515 CAN driver |
+| `docs/HACKATHON_RUNBOOK.md` | 48hr hackathon runbook — roles, time-boxed plan, demo script, judge Q&A |
+| `docs/HANDOVER.md` | What is verified, what is next, and why the load sweep is flat |
+| `docs/PROBLEM_STATEMENT_COMPLIANCE.md` | Requirement-by-requirement scorecard, verified vs. unverified |
+| `docs/INCIDENT_SPI_DRIVER.md` | The SPI bring-up incident, what was ruled out, and the resume procedure |
+| `docs/architecture.md` | Component design |
+| `docs/timing-model.md` | Delay attribution mathematics |
+| `docs/gpio.md` · `docs/uart.md` | Per-interface detail |
+| `docs/HARDWARE_PROCUREMENT_PLAN.md` | Bill of materials, wiring, CAN bus topology |
+| `CURRENT_STATE.md` | Live project state |
+| `VALIDATION_LOG.md` | Chronological verification record |
+
+## Target Requirements
+
+| Requirement | Specification |
+|---|---|
+| **OS** | QNX Neutrino 8.0.0, Quick Start Target Image (QSTI) |
+| **Hardware** | Raspberry Pi 4 (BCM2711) |
+| **Toolchain** | QNX SDP 8.0 — the SDP, not just the IDE |
+| **Serial console** | 115200 8N1, passwordless root at `root@console:/#` |
+| **SSH** | `ssh -m hmac-sha2-256 qnxuser@<target-ip>` — the MAC override is mandatory |
+| **CAN** | MCP2515 on SPI0/CE0 (Waveshare RS485 CAN HAT, SKU 14882) — seat on the 40-pin header |
+
+## Build & Deployment Guide
+
+### Prerequisites
+- QNX Software Development Platform (SDP) 8.0
+- QNX Neutrino RTOS Target (Raspberry Pi 4 / 5 or x86_64 QNX VM)
+- Qt 6.5+ (for the optional Qt/QML UI viewer)
+
+### 1. Cross-Compiling for QNX Target (aarch64le)
 
 ```bash
-# From break_trigger or break_workload directory
-make clean
-make all
+# Set up QNX SDP environment
+source ~/qnx800/qnxsdp-env.sh     # Linux / macOS
+# or: C:\Users\User\qnx800\qnxsdp-env.bat  # Windows
 
-# Run the server in background
-./build/aarch64le-debug/break_workload &
-SERVER_PID=$!
-
-# Run the client
-./build/aarch64le-debug/break_trigger
-
-# Kill the server
-kill $SERVER_PID
+# Build release/debug aarch64 binary
+make PLATFORM=aarch64le BUILD_PROFILE=debug
+# Resulting binary: build/aarch64le-debug/schedulix_can
 ```
 
-## Images
+### 2. Deploying to Raspberry Pi 4
 
-![Project Diagram Placeholder](images/project_diagram.png)
+```bash
+scp build/aarch64le-debug/schedulix_can root@<target-ip>:/tmp/
+```
 
-*Add architecture diagram, scheduling flow, or IPC visualization here.*
+### Running on Target (CLI Commands)
 
-![Response Time Graph Placeholder](images/response_time.png)
+```bash
+# SSH into your QNX board as root (uid=0 is required for tracelogger kernel access)
+ssh root@<target-ip>
+cd /tmp
 
-*Add performance measurement graphs or timing analysis results here.*
+# Check System Status & Peripherals
+./schedulix_can status
+# Outputs workload states, physical UART detection (/dev/ser1), GPIO availability, and privileged kernel tracer status.
 
-![Team Collaboration Placeholder](images/team_collaboration.png)
+# Run an Automated Experiment (e.g., Scenario 4: Preemption Storm)
+./schedulix_can experiment run S4
+# Generates trace_s4.bin, manifest_s4.json, and analysis_s4.json
 
-*Add team photos or collaboration screenshots here.*
+# Decode Raw QNX Kernel Events (.kev)
+./schedulix_can trace decode /tmp/schedulix.kev | head -n 30
 
-## License
+# Post-Mortem Trace Analysis
+./schedulix_can analyze trace_s4.bin
+# Executes the RCA engine and prints percentile stats (p50/p95/p99) and deadline slack
+```
 
-MIT
+## Sample JSON Output (analysis.json)
+
+```json
+{
+  "trace": {
+    "records": 16384,
+    "dropped": 0
+  },
+  "per_task": [
+    {
+      "task_id": 1,
+      "activations": 1923,
+      "misses": 0,
+      "miss_ratio": 0.0000,
+      "mean_ms": 2.012,
+      "p50": 2.012,
+      "p95": 2.018,
+      "p99": 2.024,
+      "max": 2.038
+    }
+  ],
+  "activations": [
+    {
+      "task_id": 1,
+      "activation_id": 1352,
+      "correlation_id": 1352,
+      "response_ns": 2012444,
+      "slack_ns": 7987556,
+      "cpu_first": 1,
+      "root_cause": "HIGH_PRIORITY_PREEMPTION",
+      "evidence_level": "CONFIRMED",
+      "interferer_pid": 4294967295,
+      "interferer_tid": 260,
+      "interferer_priority": 22,
+      "preemption_duration_ns": 10900000,
+      "lateness_ns": 0,
+      "context_switches": 42
+    }
+  ]
+}
+```
+
+## Hackathon Team & Details
+
+```text
+Project: Schedulix — Automotive RTOS Performance & Latency Analyzer
+Institution: Vasavi College of Engineering
+Team Members:
+  Abdul Aleem (1602-23-735-001)
+  Kritika Giridhar (1602-23-735-018)
+  Rishi N. (1602-23-735-033)
+Problem Statement: Track 16 — Automotive RTOS Scheduling Analysis, Instrumentation & Observability on QNX / Raspberry Pi
+```
+
+---
+*Built with QNX SDP 8.0 • Designed for automotive safety-critical mixed-criticality workloads*
