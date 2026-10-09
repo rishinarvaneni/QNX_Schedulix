@@ -1,0 +1,31 @@
+# Build artifacts
+/build/
+**/build/**/
+
+# Binary and trace files
+*.kev
+*.zip
+brake_run.kev
+brake_validation2.kev
+*. tracing
+trace.kev
+
+# IDE specific
+.metadata/
+org.eclipse/
+*.diff
+*.patch
+
+# Logs
+*.log
+*.log.*
+
+# Temp files
+temp_latest_status.txt
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Serial console state
+serial_console.ps1.state
