@@ -18,6 +18,19 @@ The system consists of two processes:
 - **Server** (`break_workload`): High-priority (`30`) thread that receives brake requests via name service and responds with timing data
 - **Client** (`break_trigger`): Sends 10 brake requests to the server and measures response times
 
+## Team Members
+
+This project was developed as part of the QNX Hackathon submission. Team members include:
+
+| Name | Role | GitHub |
+|------|------|--------|
+| [Team Member 1] | RTOS Kernel & Scheduling | [github_handle] |
+| [Team Member 2] | IPC & Messaging Architecture | [github_handle] |
+| [Team Member 3] | Timing & Instrumentation | [github_handle] |
+| [Team Member 4] | Build Systems & Deployment | [github_handle] |
+
+*Replace placeholder names with actual team member details before final submission.*
+
 ## Phase-Wise Study Coverage
 
 ### Phase 1: RTOS Fundamentals
@@ -103,14 +116,19 @@ SERVER_PID=$!
 kill $SERVER_PID
 ```
 
-## Referenced Projects
+## Images
 
-This project builds upon concepts from my previous works:
+![Project Diagram Placeholder](images/project_diagram.png)
 
-- **[Network_Telemetry_SoC](https://github.com/Abdul99Aleem/Network_Telemetry_SoC)**: RISC-V SoC network telemetry and secure packet monitoring - studied hardware packet inspection, AES-128 encryption, and 128-bit record structuring
-- **[Schedulix](https://github.com/Abdul99Aleem/Schedulix)**: Original QNX schedulix implementation - studied RTOS scheduling theory and priority-based preemptive scheduling
+*Add architecture diagram, scheduling flow, or IPC visualization here.*
 
-Both repos follow a natural, ownership-aware design philosophy where hardware/software boundaries are clearly defined and systematically documented.
+![Response Time Graph Placeholder](images/response_time.png)
+
+*Add performance measurement graphs or timing analysis results here.*
+
+![Team Collaboration Placeholder](images/team_collaboration.png)
+
+*Add team photos or collaboration screenshots here.*
 
 ## License
 
