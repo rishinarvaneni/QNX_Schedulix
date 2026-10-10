@@ -42,10 +42,10 @@ One coherent data path, from a message send to a latency number. Three pieces:
 
 Honest status, because a judge will ask:
 
-- **Proven on target:** server prints `BRAKE server ready: SCHED_FIFO, priority 30`, all 10 jobs complete, `decision=1` across the board, per-job `release_ns`/`receive_ns`/`complete_ns` on the console. That console log alone is the core evidence.
-- **In progress:** the trigger hang after `coid` assignment — debug prints are in, root cause is next.
-- **Simulated, not yet real:** core load readings and affinity migration (policy runs, `pthread_setaffinity_np` wiring is next), and the S0–S6 stress matrix scenarios beyond baseline.
-- **Captured, not yet decoded in-repo:** `.kev` traces open in the IDE profiler; in-repo decoding is future work, which is why `analyze` deliberately refuses to invent metrics from a binary it doesn't parse.
+- **Proven on target:** server prints `BRAKE server ready: SCHED_FIFO, priority 30`, all 10 jobs complete, `decision=1` across the board, per-job `release_ns`/`receive_ns`/`complete_ns` on the console. Baseline CLI run: n=3, mean 7.0 µs, jitter 0, 0 misses at 10 ms; main trace `break_trigger/brake_run.kev` (69,779,157 bytes).
+- **Fixed this session:** the trigger hang after `coid` — root cause was a missing `MsgReceive` loop (main thread sat in `pause()`), fixed by splitting `init_server()` / `server_loop()`; `pidin` confirms `30f RECEIVE`.
+- **Simulated, not yet real:** core load readings (ramp generator trips the 90% threshold visibly; `pthread_setaffinity_np` wiring is next) and the S0–S6 stress matrix scenarios beyond baseline.
+- **Captured, decoded where honest:** `.kev` traces open in the IDE profiler and via `gltraceprinter`; `analyze` refuses to invent metrics from a binary it doesn't parse, so timing comes from `jobs.csv` and the `.kev` contributes file-size evidence. The Qt Beta Live tab renders the same `analysis.json`.
 
 ## 5. Repository layout
 
@@ -59,10 +59,10 @@ Schedulix/
 │   ├── Makefile            # qcc build, ARTIFACT=break_workload
 │   └── src/
 │       └── break_workload.c# init_server + server_loop, affinity/migration policy, timestamps
-├── schedulix_cli/          # One-file measurement CLI: run/capture/analyze/gantt/report/compare
+├── qnx_schedulix_cli/      # One-file measurement CLI: run/capture/analyze/gantt/report/compare
 │   ├── Makefile            # qcc build, ARTIFACT=schedulix
 │   └── src/
-│       └── schedulix.c     # jobs.csv in, analysis.json + gantt.html + CSV reports out
+│       └── qnx_schedulix_cli.c # jobs.csv in, analysis.json + gantt.html + CSV reports out
 ├── gui/                    # Qt 6.8 dashboard (CMake): Dashboard/Timeline/RCA/Experiments views
 │   ├── CMakeLists.txt      # project schedulix_gui, exe appschedulix_gui, QML module schedulix_gui
 │   ├── main.cpp / Main.qml # app entry + 1536x864 window with sidebar navigation

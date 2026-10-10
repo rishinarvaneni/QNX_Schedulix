@@ -45,14 +45,12 @@ static uint64_t now_ns(void)
 
 static int get_core_load_percent(int core_id)
 {
-    /* On QNX, we could read from /dev/cpuinfo or use traceparser.
-       For simulation, return a value that demonstrates the threshold logic. */
-    /* In a real QNX implementation, use:
-       - per-core counter from syspage
-       - traceparser for THREAD events
-       - ClockCycles profiling
-       */
-    return (core_id * 25) % 100;
+    /* SIMULATED ramp 0..99 so the 90% threshold visibly trips in demo.
+       Real QNX source would be per-core counters from syspage or
+       THREAD-event rates from the trace parser. */
+    static unsigned tick = 0;
+    tick++;
+    return (int)((tick * 13u + (unsigned)core_id * 29u) % 100u);
 }
 
 typedef struct {
@@ -102,7 +100,9 @@ void *level1_task(void *arg)
        On QNX, use: pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask); */
     /* Simulated: Level 1 runs on core 0, migrates to core 1 if load > 90% */
 
+    unsigned long n1 = 0; /* throttle: evaluate every 100 iters (~0.1 s) */
     for (;;) {
+        if (++n1 % 100 == 0) {
         int load = get_core_load_percent(task_info[LEVEL_1].core_id);
         if (load > CPU_LOAD_THRESHOLD) {
             task_info[LEVEL_1].migrations++;
@@ -113,8 +113,11 @@ void *level1_task(void *arg)
                pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask);
                */
             task_info[LEVEL_1].core_id = (task_info[LEVEL_1].core_id + 1) % NUM_CORES;
-            printf("L1: Migration triggered, core load %d%% - moving to core %d\n",
-                   load, task_info[LEVEL_1].core_id);
+            printf("L1: core=%d load=%d%% > 90%% -> MIGRATE (total=%u)\n",
+                   task_info[LEVEL_1].core_id, load,
+                   task_info[LEVEL_1].migrations);
+            fflush(stdout);
+        }
         }
 
         /* Simulate critical brake processing */
@@ -131,7 +134,9 @@ void *level2_task(void *arg)
     /* On QNX, use: pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask); */
     /* Simulated: Level 2 runs on core 1, migrates to core 2 if load > 90% */
 
+    unsigned long n2 = 0; /* throttle: evaluate every 100 iters (~0.05 s) */
     for (;;) {
+        if (++n2 % 100 == 0) {
         int load = get_core_load_percent(task_info[LEVEL_2].core_id);
         if (load > CPU_LOAD_THRESHOLD) {
             task_info[LEVEL_2].migrations++;
@@ -142,8 +147,11 @@ void *level2_task(void *arg)
                pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask);
                */
             task_info[LEVEL_2].core_id = (task_info[LEVEL_2].core_id + 1) % NUM_CORES;
-            printf("L2: Migration triggered, core load %d%% - moving to core %d\n",
-                   load, task_info[LEVEL_2].core_id);
+            printf("L2: core=%d load=%d%% > 90%% -> MIGRATE (total=%u)\n",
+                   task_info[LEVEL_2].core_id, load,
+                   task_info[LEVEL_2].migrations);
+            fflush(stdout);
+        }
         }
 
         struct timespec ts = { .tv_sec = 0, .tv_nsec = 500000 };
@@ -159,13 +167,18 @@ void *level3_task(void *arg)
     /* On QNX, use: pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask); */
     /* Simulated: Level 3 runs on core 2, yields if load > 90% */
 
+    unsigned long n3 = 0; /* throttle: evaluate every 500 iters (~0.1 s) */
     for (;;) {
+        if (++n3 % 500 == 0) {
         int load = get_core_load_percent(task_info[LEVEL_3].core_id);
         if (load > CPU_LOAD_THRESHOLD) {
             task_info[LEVEL_3].migrations++;
             /* Level 3 can share core, just yield */
-            printf("L3: High load %d%% on core %d - yielding\n",
-                   load, task_info[LEVEL_3].core_id);
+            printf("L3: core=%d load=%d%% > 90%% -> YIELD (total=%u)\n",
+                   task_info[LEVEL_3].core_id, load,
+                   task_info[LEVEL_3].migrations);
+            fflush(stdout);
+        }
         }
 
         struct timespec ts = { .tv_sec = 0, .tv_nsec = 200000 };
