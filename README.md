@@ -4,33 +4,33 @@
 [![Target](https://img.shields.io/badge/Target-Raspberry_Pi_4-red.svg)](https://www.raspberrypi.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 1. Why this project exists
+## 1. The problem we're solving
 
 In a software-defined vehicle, an ASIL-D braking task, an ASIL-B perception task and a QM diagnostics task all share the same multicore SoC. When a deadline gets missed, the CPU utilization graph will happily tell you the system was "loaded" — and nothing else. It won't tell you which higher-priority thread preempted the victim, how long the victim waited in the ready queue, or whether the delay was preemption, blocking, or just execution overrun.
 
-I built Schedulix to answer that concretely: **for every job, decompose the response time into its parts and name the interferer, with the timestamps to prove it.** No claimed metric without the numbers behind it — that rule runs through the whole repo.
+We built Schedulix to answer that concretely: **for every job, decompose the response time into its parts and name the interferer, with the timestamps to prove it.** No claimed metric without the numbers behind it — that rule runs through the whole repo.
 
 The scope for this hackathon submission (Track 16 — Automotive RTOS Scheduling Analysis, Instrumentation & Observability on QNX / Raspberry Pi): a brake request/response workload on QNX Neutrino 8.0, a 3-level priority task set with core-affinity migration, a one-file CLI that turns runs into latency statistics and timelines, and kernel traces captured off the target with `tracelogger`.
 
-## 2. What I built
+## 2. What we built
 
 One coherent data path, from a message send to a latency number. Three pieces:
 
 **`break_workload/` — the server.** Registers the well-known name `brake`, runs SCHED_FIFO, and answers brake requests with nanosecond timestamps. It has grown into a 3-level task set: L1 brake at priority 30, L2 at 20, L3 at 10, each pinned to a core with a migration counter that trips when its core's load crosses 90%. The main thread never leaves `MsgReceive`/`MsgReply` duty, so clients can't block forever.
 
-**`break_trigger/` — the client.** Opens `brake`, sends 10 requests one second apart, prints the response time of each. Right now it's a debug build: it prints the connection id after `name_open`, the return code of every `MsgSend`, and per-job decision plus `response_ns` — because it currently hangs right after `coid` assignment and I need the prints to say whether it's stuck *in* `MsgSend` or never getting a reply. That's what I'm debugging next.
+**`break_trigger/` — the client.** Opens `brake`, sends 10 requests one second apart, prints the response time of each. Right now it's a debug build: it prints the connection id after `name_open`, the return code of every `MsgSend`, and per-job decision plus `response_ns` — because it currently hangs right after `coid` assignment and we need the prints to say whether it's stuck *in* `MsgSend` or never getting a reply. That's what we're debugging next.
 
 **`schedulix_cli/` — the measurement CLI.** One file, five commands, end to end: `run` drives the server and writes `jobs.csv`; `capture` wraps `tracelogger`; `analyze` computes mean/min/max/jitter/p50/p95/p99/misses into `analysis.json`; `gantt` renders an HTML timeline; `report` and `compare` give CSV summaries. `jobs.csv` is the source of truth and the `.kev` is only stat'ed for size — the metrics come from release/completion timestamps we actually captured.
 
 **`gui/` — the Qt 6 dashboard.** A desktop viewer (Dashboard, Timeline, Root Cause, Experiments, Jitter screens) backed by C++ models, plus `parse_kev.py`, which decodes the raw `.kev` binary — header located by marker, 16-byte little-endian events, RUNNING/READY/BLOCKED classes validated against the `break_trigger` pid — into `brake_data.json`, `timeline_data.json` and `kev_summary.json` for the views. The Beta screen bakes in a real 3-job board run so the tab is never empty, and Reload pulls fresh `analysis.json` off the target. `gui/data/` carries sample `jobs.csv`/`analysis.json` so the app opens meaningfully with no hardware attached.
 
-## 3. How it works, in the order I built it
+## 3. How it works, in the order we built it
 
 **Phase 1 — IPC bring-up.** QNX name service plus synchronous message passing: `name_attach("brake")` on the server, `name_open("brake")` on the client, `MsgSend`/`MsgReceive`/`MsgReply` carrying `brake_request_t` (`sequence`, `brake_request`, `release_ns`) one way and `brake_response_t` (`sequence`, `decision`, `received_ns`, `completed_ns`) back. Pulses (`rcvid == 0`) are skipped, not mistaken for requests. Response time is `(completed_ns - release_ns)`. An early linker fight — both files defined `main()` — got fixed by keeping `main()` in the trigger and server init in `init_server()`.
 
 **Phase 2 — Scheduling.** The server runs SCHED_FIFO at priority 30, set with `pthread_setschedparam`, verified on target with `pidin`. FIFO means a started request runs to completion; anything above 30 can preempt between receive and reply. Timestamps come from `clock_gettime(CLOCK_MONOTONIC)`, and every print is line-buffered with explicit `fflush` so nothing gets lost over the serial console.
 
-**Phase 3 — Thread affinity and migration (this phase).** Each level tracks its core, activation count and migration count in a `task_info` table. When a level's core load crosses the 90% threshold, L1/L2 migrate to the next core and L3 yields. The real `pthread_setaffinity_np` calls are sketched in the code comments; what runs today is the simulated version of the same policy, so the migration paths get exercised before I touch real affinity on the target. The server split — `init_server()` attaches the name and spawns the level threads, `server_loop()` keeps the main thread on `MsgReceive` — is what keeps the client unblocked.
+**Phase 3 — Thread affinity and migration (this phase).** Each level tracks its core, activation count and migration count in a `task_info` table. When a level's core load crosses the 90% threshold, L1/L2 migrate to the next core and L3 yields. The real `pthread_setaffinity_np` calls are sketched in the code comments; what runs today is the simulated version of the same policy, so the migration paths get exercised before we touch real affinity on the target. The server split — `init_server()` attaches the name and spawns the level threads, `server_loop()` keeps the main thread on `MsgReceive` — is what keeps the client unblocked.
 
 **Phase 4 — Measurement pipeline.** `schedulix run --scenario baseline --duration 10 --jobs /tmp/jobs.csv` produces the CSV; `schedulix capture --duration 3 --output /tmp/run.kev` grabs the kernel trace; `schedulix analyze --trace /tmp/run.kev --jobs /tmp/jobs.csv --deadline 10` writes the JSON with percentiles and miss counts; `schedulix gantt` and `schedulix report` turn it into a timeline and a summary table.
 
@@ -211,4 +211,3 @@ Problem statement: Track 16 — Automotive RTOS Scheduling Analysis, Instrumenta
 ```
 
 ---
-*Built with QNX SDP 8.0 — measured, not asserted.*
