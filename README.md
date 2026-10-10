@@ -208,6 +208,7 @@ Team members:
   Kritika Giridhar (1602-23-735-018)
   Rishi N. (1602-23-735-033)
 Problem statement: Track 16 — Automotive RTOS Scheduling Analysis, Instrumentation & Observability on QNX / Raspberry Pi
+Result: Runners-up, AP cluster-level hackathon (24 teams, 2 winners)
 ```
 
 ## 10. Process note: how we worked, what we deferred
