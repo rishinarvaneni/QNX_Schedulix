@@ -1,10 +1,3 @@
-/*
- * break_trigger.c
- *
- *  Created on: 09-Oct-2026
- *      Author: User
- */
-
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -38,8 +31,10 @@ void send_brake_requests(void)
     int coid = name_open("brake", 0);
     if (coid == -1) {
         perror("name_open: start brake_server first");
-        return;
+        exit(EXIT_FAILURE);
     }
+    printf("name_open succeeded, coid=%d\n", coid);
+    fflush(stdout);
 
     for (uint32_t i = 1; i <= 10; ++i) {
         brake_request_t req = {
@@ -50,26 +45,37 @@ void send_brake_requests(void)
 
         brake_response_t resp = {0};
 
-        if (MsgSend(coid, &req, sizeof(req),
-                    &resp, sizeof(resp)) == -1) {
+        int rc = MsgSend(coid, &req, sizeof(req),
+                    &resp, sizeof(resp));
+        printf("MsgSend %u rc=%d\n", i, rc);
+        fflush(stdout);
+
+        if (rc == -1) {
             perror("MsgSend");
             name_close(coid);
-            return;
+            exit(EXIT_FAILURE);
         }
 
-        printf("Job %u: response time = %.3f ms\n",
-               resp.sequence,
-               (resp.completed_ns - req.release_ns) / 1e6);
+        printf("Job %u: decision=%u response_ns=%llu\n",
+               resp.sequence, resp.decision,
+               (unsigned long long)(resp.completed_ns - req.release_ns));
+        fflush(stdout);
 
         struct timespec delay = { .tv_sec = 1, .tv_nsec = 0 };
         nanosleep(&delay, NULL);
     }
 
     name_close(coid);
+    printf("All 10 jobs sent successfully\n");
+    fflush(stdout);
+    return;
 }
 
 int main(void)
 {
+    setvbuf(stdout, NULL, _IOLBF, 0); /* line-buffered: every \n flushes */
+    printf("break_trigger starting...\n");
     send_brake_requests();
+    printf("break_trigger done\n");
     return EXIT_SUCCESS;
 }
