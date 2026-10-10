@@ -22,6 +22,8 @@ One coherent data path, from a message send to a latency number. Three pieces:
 
 **`schedulix_cli/` — the measurement CLI.** One file, five commands, end to end: `run` drives the server and writes `jobs.csv`; `capture` wraps `tracelogger`; `analyze` computes mean/min/max/jitter/p50/p95/p99/misses into `analysis.json`; `gantt` renders an HTML timeline; `report` and `compare` give CSV summaries. `jobs.csv` is the source of truth and the `.kev` is only stat'ed for size — the metrics come from release/completion timestamps we actually captured.
 
+**`gui/` — the Qt 6 dashboard.** A desktop viewer (Dashboard, Timeline, Root Cause, Experiments, Jitter screens) backed by C++ models, plus `parse_kev.py`, which decodes the raw `.kev` binary — header located by marker, 16-byte little-endian events, RUNNING/READY/BLOCKED classes validated against the `break_trigger` pid — into `brake_data.json`, `timeline_data.json` and `kev_summary.json` for the views. The Beta screen bakes in a real 3-job board run so the tab is never empty, and Reload pulls fresh `analysis.json` off the target. `gui/data/` carries sample `jobs.csv`/`analysis.json` so the app opens meaningfully with no hardware attached.
+
 ## 3. How it works, in the order I built it
 
 **Phase 1 — IPC bring-up.** QNX name service plus synchronous message passing: `name_attach("brake")` on the server, `name_open("brake")` on the client, `MsgSend`/`MsgReceive`/`MsgReply` carrying `brake_request_t` (`sequence`, `brake_request`, `release_ns`) one way and `brake_response_t` (`sequence`, `decision`, `received_ns`, `completed_ns`) back. Pulses (`rcvid == 0`) are skipped, not mistaken for requests. Response time is `(completed_ns - release_ns)`. An early linker fight — both files defined `main()` — got fixed by keeping `main()` in the trigger and server init in `init_server()`.
@@ -33,6 +35,8 @@ One coherent data path, from a message send to a latency number. Three pieces:
 **Phase 4 — Measurement pipeline.** `schedulix run --scenario baseline --duration 10 --jobs /tmp/jobs.csv` produces the CSV; `schedulix capture --duration 3 --output /tmp/run.kev` grabs the kernel trace; `schedulix analyze --trace /tmp/run.kev --jobs /tmp/jobs.csv --deadline 10` writes the JSON with percentiles and miss counts; `schedulix gantt` and `schedulix report` turn it into a timeline and a summary table.
 
 **Phase 5 — Kernel traces.** Captured on target with `tracelogger` (a 49 MB run with `-s 20`; the "not keeping up" warnings are buffer pressure, expected). The `.kev` files are imported in the Momentics System Profiler and stay local — trace binaries are gitignored, so what's in the repo is the code that produced them and the CLI that turns them into numbers.
+
+**Phase 6 — Dashboard GUI.** The Qt app closes the loop: `parse_kev.py brake_run.kev` decodes the kernel trace into dashboard JSONs (per-job response times, per-CPU timeline lanes with brake intervals highlighted, context-switch and utilization summary), and the QML views render them — latencies and percentiles on the Dashboard, execution lanes on the Timeline, the interferer call-out on the Root Cause screen. It runs against `gui/data/` samples out of the box; point it at fresh parser output for live board runs.
 
 ## 4. Where things stand
 
@@ -59,6 +63,14 @@ Schedulix/
 │   ├── Makefile            # qcc build, ARTIFACT=schedulix
 │   └── src/
 │       └── schedulix.c     # jobs.csv in, analysis.json + gantt.html + CSV reports out
+├── gui/                    # Qt 6.8 dashboard (CMake): Dashboard/Timeline/RCA/Experiments views
+│   ├── CMakeLists.txt      # project schedulix_gui, exe appschedulix_gui, QML module schedulix_gui
+│   ├── main.cpp / Main.qml # app entry + 1536x864 window with sidebar navigation
+│   ├── qml/                # theme/, components/, screens/ (Dashboard, Timeline, RootCause, ...)
+│   ├── src/                # AppController + C++ models (TaskMetrics, Timeline, RCA, Jitter, ...)
+│   ├── parse_kev.py        # .kev binary → brake_data/timeline_data/kev_summary JSONs
+│   ├── hw/                 # host-side hardware preflight checks
+│   └── data/               # sample jobs.csv + analysis.json so the GUI runs with no target
 ├── tools/
 │   └── serial_console.ps1  # Serial console helper for the Pi UART link
 ├── docs/                   # Bring-up guide, runbooks, architecture, timing model (see §8)
@@ -100,6 +112,18 @@ ssh root@192.168.10.5
 /tmp/schedulix analyze --trace /tmp/run.kev --jobs /tmp/jobs.csv --deadline 10 --out /tmp/analysis.json
 /tmp/schedulix gantt --input /tmp/analysis.json --output /tmp/gantt.html
 /tmp/schedulix report --input /tmp/analysis.json --out /tmp/report.csv
+```
+
+```bash
+# 5. Decode a kernel trace into dashboard JSONs (host machine, needs python3)
+python gui/parse_kev.py brake_run.kev
+# writes brake_data.json + timeline_data.json + kev_summary.json next to gui/data/
+
+# 6. Build and run the dashboard (host machine, needs Qt 6.8 + CMake)
+cmake -S gui -B gui/build -DCMAKE_BUILD_TYPE=Debug
+cmake --build gui/build
+./gui/build/appschedulix_gui
+# opens on bundled gui/data/ samples; Beta screen Reload pulls fresh target files
 ```
 
 Pi UART wiring (from `tools/serial_console.ps1`): header pin 6 = GND, pin 8 = GPIO14/TX (Pi transmits), pin 10 = GPIO15/RX (Pi receives).

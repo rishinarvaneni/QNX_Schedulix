@@ -1,0 +1,20 @@
+{
+  "jobs_csv": "/tmp/jobs.csv",
+  "trace": "brake_run.kev",
+  "trace_bytes": 69779157,
+  "count": 3,
+  "deadline_ms": 10.000,
+  "mean_us": 7.0,
+  "min_us": 7,
+  "max_us": 7,
+  "jitter_us": 0,
+  "p50_us": 7,
+  "p95_us": 7,
+  "p99_us": 7,
+  "misses": 0,
+  "jobs": [
+    {"seq":1,"release_ns":751997412426,"completed_ns":751997419426,"response_us":7,"decision":1},
+    {"seq":2,"release_ns":752998013241,"completed_ns":752998020278,"response_us":7,"decision":1},
+    {"seq":3,"release_ns":753999014000,"completed_ns":753999021167,"response_us":7,"decision":1}
+  ]
+}

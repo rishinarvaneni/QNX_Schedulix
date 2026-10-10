@@ -1,0 +1,21 @@
+# Dev-host + Raspberry Pi Python dependencies for Schedulix hardware bring-up.
+#
+#   pip install -r hw/requirements-host.txt          # Windows/Linux dev host
+#   pip install -r hw/requirements-host.txt          # on the Pi (Raspberry Pi OS)
+#
+# RPi.GPIO / gpiozero / spidev are Linux-only. They install on the Pi and are
+# skipped on the Windows dev host. For the QNX 8.0 target itself, none of these
+# apply: CAN is reached through can-mcp2515 (/dev/can0, /dev/can1) and GPIO
+# through the gpio-bcm2711 utility, not via Python.
+
+pyserial>=3.5          # UART via USB-to-UART adapter
+python-can>=4.4        # CAN injection; virtual/socketcan/slcan backends
+
+# Raspberry Pi only
+RPi.GPIO>=0.7.1        ; sys_platform != "win32"
+gpiozero>=1.6          ; sys_platform != "win32"
+spidev>=3.5            ; sys_platform == "linux"
+
+# Trace analysis
+numpy>=1.26
+matplotlib>=3.8

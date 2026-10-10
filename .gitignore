@@ -27,6 +27,12 @@ temp_latest_status.txt
 .DS_Store
 Thumbs.db
 
+# Qt Creator / QML tooling (machine-local)
+*.user
+.qtcreator/
+.qmlls.ini
+*.qmltypes
+
 # Serial console state
 serial_console.ps1.state
 

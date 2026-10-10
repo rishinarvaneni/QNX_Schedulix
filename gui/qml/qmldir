@@ -1,0 +1,3 @@
+module schedulix_gui  
+typeinfo appschedulix_gui.qmltypes  
+BrakeAnalysis 254.0 qml/components/BrakeAnalysis/BrakeAnalysis.qml  

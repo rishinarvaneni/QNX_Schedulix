@@ -1,0 +1,6 @@
+build/
+.qtcreator/
+screenshots/
+reference_images/
+importedcontent/
+*.user
