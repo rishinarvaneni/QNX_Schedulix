@@ -210,4 +210,22 @@ Team members:
 Problem statement: Track 16 — Automotive RTOS Scheduling Analysis, Instrumentation & Observability on QNX / Raspberry Pi
 ```
 
+## 10. Process note: how we worked, what we deferred
+
+We followed a simple stage-gate flow — requirements, outcomes, needs, partitioning, PoC, research, coding, integration, interfacing, optimization — and held each stage to runnable evidence before moving on. Where we stand on each, honestly:
+
+| Stage | Status as of submission |
+|---|---|
+| Requirements / outcomes | Fixed: brake workload end-to-end with measured proof; wider S0–S6 matrix defined, baseline validated |
+| Functional + non-functional needs | Met for the brake slice (repeatable runs, machine-readable JSON/CSV); stress-level comparison queued |
+| HW/SW partitioning | Pi 4 + QNX target runs workload and capture; host does decode and dashboard — no unbuilt hardware claimed |
+| PoC pipeline | Live: `break_workload → break_trigger → tracelogger → schedulix analyze → analysis.json → Qt Beta Live` |
+| Core-stack research | Reused `tracelogger`, `pidin`, `gltraceprinter`, Momentics profiler instead of rebuilding a profiler |
+| Coding / integration / interfacing | Verified stage by stage; CLI and dashboard read the same files so values always agree |
+| Optimization | Only safe wins taken (bounded buffers, throttled logging); no metric invented to look faster |
+
+**MISRA compliance:** planned from the start for the C sources, not completed — the 24-hour window went to a working measured pipeline instead. Queued as first post-hackathon work item, no exceptions claimed.
+
+**Authorship:** every C/QML/Python line in this repo was written by the three members above — nothing lifted from elsewhere. A standard file header carrying all three names and IDs will be added inside each source file after submission (submission is closed and the 24 hours have passed); this note stands as the record until then.
+
 ---
